@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Heart, MessageCircle, Sparkles, ChevronDown, ChevronUp, BookmarkPlus, MoreVertical, Edit2, Trash2, ExternalLink } from "lucide-react";
+import { Heart, MessageCircle, Sparkles, ChevronDown, ChevronUp, BookmarkPlus, MoreVertical, Edit2, Trash2, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Link, useNavigate } from "react-router-dom";
@@ -9,6 +9,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 
 import CommentModal from "./CommentModal";
+import RewardedAdModal from "../ads/RewardedAdModal";
 
 export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, currentUserEmail }) {
   const [expanded, setExpanded] = useState(false);
@@ -19,10 +20,15 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
   const [showComments, setShowComments] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [showSignUpPrompt, setShowSignUpPrompt] = useState(false);
+  const [showAdModal, setShowAdModal] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [localGuess, setLocalGuess] = useState(null);
   const videoRef = useRef(null);
   const navigate = useNavigate();
 
-  const hasAiRecipe = post.ai_recipe_guess?.title;
+  // The guess shown: a freshly generated one, or whatever's stored on the post.
+  const aiGuess = localGuess || post.ai_recipe_guess;
+  const hasAiRecipe = aiGuess?.title;
   const isOwnPost = currentUserEmail && post.created_by === currentUserEmail;
   const isVideo = post.media_url && (
     post.media_url.includes(".mp4") ||
@@ -78,6 +84,36 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
       return comments.length;
     },
   });
+
+  // "Best Guess Recipe": gated behind a rewarded video ad, then Claude vision
+  // reads the photo into a recipe that's saved on the post + savable to profile.
+  const handleBestGuessClick = () => {
+    if (!currentUser) { setShowSignUpPrompt(true); return; }
+    setShowAdModal(true);
+  };
+
+  const handleAdComplete = async () => {
+    setShowAdModal(false);
+    setGenerating(true);
+    try {
+      const result = await base44.integrations.Core.GuessRecipeFromImage({ image_url: post.media_url });
+      if (result?.title) {
+        setLocalGuess(result);
+        setExpanded(true);
+        // Persist onto the post so it shows for everyone next time (best-effort).
+        base44.entities.Post.update(post.id, { ai_recipe_guess: result }).catch(() => {});
+      } else {
+        alert("Couldn't read a recipe from this photo — try a clearer food pic.");
+      }
+    } catch (e) {
+      alert("Recipe generation is unavailable right now.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Show the generate button only on photo posts (not video) that have no guess yet.
+  const canGuess = post.media_url && !isVideo && !hasAiRecipe;
 
   return (
     <div className="relative w-full h-[calc(100svh-120px)] bg-[#0A1220] flex-shrink-0 snap-start overflow-hidden">
@@ -217,7 +253,22 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
         {/* Caption */}
         <p className="text-sm text-white/90 leading-snug mb-2 line-clamp-2">{post.caption}</p>
 
-        {/* AI Recipe toggle */}
+        {/* Best Guess Recipe — generate button (no guess yet) */}
+        {canGuess && (
+          <button
+            onClick={handleBestGuessClick}
+            disabled={generating}
+            className="flex items-center gap-1.5 bg-[#FF6B35]/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full disabled:opacity-60"
+          >
+            {generating ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cooking up recipe…</>
+            ) : (
+              <><Sparkles className="w-3.5 h-3.5" /> Best Guess Recipe</>
+            )}
+          </button>
+        )}
+
+        {/* AI Recipe toggle — once a guess exists */}
         {hasAiRecipe && (
           <div>
             <button
@@ -225,7 +276,7 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
               className="flex items-center gap-1.5 text-[#FF6B35] text-xs font-semibold"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              AI Recipe: {post.ai_recipe_guess.title}
+              AI Recipe: {aiGuess.title}
               {expanded ? <ChevronDown className="w-3.5 h-3.5 ml-1" /> : <ChevronUp className="w-3.5 h-3.5 ml-1" />}
             </button>
 
@@ -239,11 +290,11 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
                 >
                   <div className="mt-2 bg-black/60 backdrop-blur-sm rounded-xl p-3 space-y-2 max-h-48 overflow-y-auto">
                     <p className="text-xs font-semibold text-[#C4C4BA] uppercase tracking-wider">Ingredients</p>
-                    {(Array.isArray(post.ai_recipe_guess.ingredients) ? post.ai_recipe_guess.ingredients : []).map((ing, i) => (
+                    {(Array.isArray(aiGuess.ingredients) ? aiGuess.ingredients : []).map((ing, i) => (
                       <p key={i} className="text-xs text-[#C4C4BA]">• {ing.quantity} {ing.unit} {ing.name}</p>
                     ))}
                     <Button
-                      onClick={() => onSaveRecipe(post)}
+                      onClick={() => onSaveRecipe({ ...post, ai_recipe_guess: aiGuess })}
                       size="sm"
                       className="w-full bg-[#FF6B35] hover:bg-[#FF8555] text-white rounded-lg mt-1"
                     >
@@ -263,6 +314,16 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
         onClose={() => setShowComments(false)}
         post={post}
         currentUser={currentUser}
+      />
+
+      {/* Watch-an-ad gate before generating the best-guess recipe */}
+      <RewardedAdModal
+        open={showAdModal}
+        onClose={() => setShowAdModal(false)}
+        onComplete={handleAdComplete}
+        userId={currentUser?.id}
+        title="Unlock the recipe"
+        subtitle="Watch a short ad to reveal the AI recipe for this dish"
       />
 
       {/* Sign Up Prompt Modal */}

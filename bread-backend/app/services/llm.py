@@ -50,16 +50,27 @@ async def invoke_llm(prompt: str, response_json_schema=None) -> dict:
     return {"output": text}
 
 
+def _parse_json(text: str) -> dict:
+    """Strip markdown fences and parse JSON from a model response."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text[: text.rfind("```")]
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {"error": "Failed to parse JSON response", "raw": text}
+
+
 async def guess_recipe_from_image(image_url: str) -> dict:
     """
-    Use Claude to guess a recipe from a food photo URL.
-    Returns {title, ingredients: [{name, quantity, unit}], instructions: [str]}
+    Use Claude VISION to guess a recipe from a food photo.
+    The image is passed as a real image block (not a text URL), so Claude
+    actually sees the dish. Returns
+    {title, ingredients: [{name, quantity, unit}], instructions: [str]}
     """
-    prompt = (
-        f"Look at this food photo: {image_url}\n\n"
-        "Based on what you can see, guess the recipe. "
-        "Provide a recipe title and ingredient list with approximate quantities."
-    )
+    client = get_client()
 
     schema = {
         "type": "object",
@@ -80,4 +91,26 @@ async def guess_recipe_from_image(image_url: str) -> dict:
         },
     }
 
-    return await invoke_llm(prompt, response_json_schema=schema)
+    system = (
+        "You are a chef assistant for a cooking app called Bread. "
+        "Given a food photo, identify the dish and produce a best-guess recipe. "
+        "Respond ONLY with valid JSON matching this schema: "
+        + json.dumps(schema)
+        + ". Use common measurement units (oz, lbs, cups, tbsp, tsp, pcs). "
+        "No explanation, no markdown — just the JSON object."
+    )
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1500,
+        system=system,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "url", "url": image_url}},
+                {"type": "text", "text": "Identify this dish and give a best-guess recipe."},
+            ],
+        }],
+    )
+
+    return _parse_json(message.content[0].text)

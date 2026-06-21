@@ -164,6 +164,11 @@ const integrations = {
       return request('POST', '/api/llm/invoke', { prompt, response_json_schema });
     },
 
+    // Best-guess recipe from a food photo (Claude vision).
+    async GuessRecipeFromImage({ image_url }) {
+      return request('POST', '/api/llm/guess-recipe', { image_url });
+    },
+
     async SendEmail({ to, subject, body: emailBody }) {
       // Email via SES — stubbed until SES is configured
       console.warn('SendEmail called — configure SES to enable:', { to, subject });
