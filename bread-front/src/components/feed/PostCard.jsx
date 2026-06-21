@@ -10,6 +10,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import CommentModal from "./CommentModal";
 import RewardedAdModal from "../ads/RewardedAdModal";
+import { useEffectiveZip } from "@/lib/location";
+import { useRecipeCost } from "@/lib/useRecipeCost";
 
 export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, currentUserEmail }) {
   const [expanded, setExpanded] = useState(false);
@@ -84,6 +86,20 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
       return comments.length;
     },
   });
+
+  // Live pricing + pantry on the AI guess, so the feed can show
+  // "you have X of Y · est. $Z" — the hook that makes people save & cook.
+  const effectiveZip = useEffectiveZip(currentUser);
+  const { data: pantryItems = [] } = useQuery({
+    queryKey: ["pantryItems-feed"],
+    queryFn: () => base44.entities.PantryItem.list("-created_date", 200),
+    enabled: !!currentUser,
+  });
+  const guessRecipe = aiGuess?.ingredients ? { id: post.id, ingredients: aiGuess.ingredients } : null;
+  const { data: guessCost } = useRecipeCost(guessRecipe, effectiveZip, pantryItems);
+
+  const guessTotalCount = Array.isArray(aiGuess?.ingredients) ? aiGuess.ingredients.length : 0;
+  const guessHaveCount = guessCost?.already_have?.length || 0;
 
   // "Best Guess Recipe": gated behind a rewarded video ad, then Claude vision
   // reads the photo into a recipe that's saved on the post + savable to profile.
@@ -301,6 +317,19 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
                         ))}
                       </>
                     )}
+
+                    {/* Pantry + price hook — "you have X of Y · est $Z" */}
+                    {guessCost && guessTotalCount > 0 && (
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10 text-[11px]">
+                        <span className="text-[#34D399] font-medium">
+                          ✓ You have {guessHaveCount} of {guessTotalCount} ingredients
+                        </span>
+                        {guessCost.total_cost > 0 && (
+                          <span className="text-[#C4C4BA]">est. ${guessCost.total_cost.toFixed(2)} to buy the rest</span>
+                        )}
+                      </div>
+                    )}
+
                     <Button
                       onClick={() => onSaveRecipe({ ...post, ai_recipe_guess: aiGuess })}
                       size="sm"

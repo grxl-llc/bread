@@ -125,8 +125,22 @@ async def guess_recipe_from_image(image_url: str, caption: str = "") -> dict:
     except Exception as e:
         return {"error": f"Could not load the image: {e}"}
 
-    if media_type not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
+    # Downscale to keep Claude's image-token cost low — recipe recognition
+    # doesn't need full phone-camera resolution. Cuts per-call cost substantially.
+    try:
+        from io import BytesIO
+        from PIL import Image
+        img = Image.open(BytesIO(img_bytes)).convert("RGB")
+        img.thumbnail((1024, 1024))  # keeps aspect ratio, max 1024px
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        img_bytes = buf.getvalue()
         media_type = "image/jpeg"
+    except Exception:
+        # Fall back to the original bytes if resize fails
+        if media_type not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
+            media_type = "image/jpeg"
+
     b64 = base64.standard_b64encode(img_bytes).decode("utf-8")
 
     message = client.messages.create(
