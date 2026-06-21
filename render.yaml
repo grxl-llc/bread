@@ -1,0 +1,43 @@
+# Render Blueprint — provisions the backend + Postgres together.
+# In Render: New → Blueprint → connect this repo → it reads this file.
+# Secrets marked `sync: false` are entered once in the Render dashboard
+# (never committed to git).
+services:
+  - type: web
+    name: bread-backend
+    runtime: docker
+    rootDir: bread-backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    plan: starter            # ~$7/mo flat; predictable regardless of call volume
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bread-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true   # Render generates a strong secret automatically
+      - key: AWS_REGION
+        value: us-east-2
+      - key: S3_BUCKET_NAME
+        value: bread-user-media
+      - key: APP_ENV
+        value: production
+      # Secrets — set these in the Render dashboard (sync:false = not in git)
+      - key: KROGER_CLIENT_ID
+        sync: false
+      - key: KROGER_CLIENT_SECRET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Set to your Vercel frontend URL after it deploys (comma-separated ok)
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+databases:
+  - name: bread-db
+    plan: basic-256mb        # ~$7/mo; persistent Postgres you own & can export
