@@ -1,0 +1,46 @@
+css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #15233A;
+  --navy-light: #1A2744;
+  --navy-mid: #243352;
+  --cream: #F5F5F0;
+  --cream-dim: #C4C4BA;
+  --accent: #FF6B35;
+  --accent-hover: #FF8555;
+  --green: #34D399;
+  --red: #EF4444;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-[#15233A] text-[var(--cream)];
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Hide scrollbar for category bar */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom card glow */
+.card-glow {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 2px 20px rgba(0,0,0,0.3);
+}
+
+/* Smooth transitions */
+.tab-transition {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
