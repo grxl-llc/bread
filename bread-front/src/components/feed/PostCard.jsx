@@ -103,10 +103,10 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
         // Persist onto the post so it shows for everyone next time (best-effort).
         base44.entities.Post.update(post.id, { ai_recipe_guess: result }).catch(() => {});
       } else {
-        alert("Couldn't read a recipe from this photo — try a clearer food pic.");
+        alert(result?.error || "Couldn't read a recipe from this photo — try a clearer food pic.");
       }
     } catch (e) {
-      alert("Recipe generation is unavailable right now.");
+      alert(e?.message || "Recipe generation is unavailable right now.");
     } finally {
       setGenerating(false);
     }

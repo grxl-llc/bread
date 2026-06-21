@@ -41,4 +41,8 @@ async def guess_recipe(
     """
     if not body.image_url:
         raise HTTPException(422, "image_url required")
-    return await guess_recipe_from_image(body.image_url)
+    try:
+        return await guess_recipe_from_image(body.image_url)
+    except Exception as e:
+        # Surface the actual reason so the client can show something useful.
+        return {"error": str(e)}

@@ -1,4 +1,6 @@
 import json
+import base64
+import httpx
 import anthropic
 from app.config import settings
 
@@ -100,6 +102,22 @@ async def guess_recipe_from_image(image_url: str) -> dict:
         "No explanation, no markdown — just the JSON object."
     )
 
+    # Download the image server-side and send it as base64. This is the most
+    # reliable path: it works on any SDK version and doesn't require Anthropic
+    # to fetch the URL (the backend reaches S3 directly).
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as http:
+            resp = await http.get(image_url)
+            resp.raise_for_status()
+            img_bytes = resp.content
+            media_type = (resp.headers.get("content-type") or "image/jpeg").split(";")[0]
+    except Exception as e:
+        return {"error": f"Could not load the image: {e}"}
+
+    if media_type not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
+        media_type = "image/jpeg"
+    b64 = base64.standard_b64encode(img_bytes).decode("utf-8")
+
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1500,
@@ -107,7 +125,7 @@ async def guess_recipe_from_image(image_url: str) -> dict:
         messages=[{
             "role": "user",
             "content": [
-                {"type": "image", "source": {"type": "url", "url": image_url}},
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
                 {"type": "text", "text": "Identify this dish and give a best-guess recipe."},
             ],
         }],
