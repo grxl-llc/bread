@@ -15,6 +15,7 @@ class InvokeLLMRequest(BaseModel):
 
 class GuessRecipeRequest(BaseModel):
     image_url: str
+    caption: Optional[str] = ""
 
 
 @router.post("/invoke")
@@ -42,7 +43,7 @@ async def guess_recipe(
     if not body.image_url:
         raise HTTPException(422, "image_url required")
     try:
-        return await guess_recipe_from_image(body.image_url)
+        return await guess_recipe_from_image(body.image_url, body.caption or "")
     except Exception as e:
         # Surface the actual reason so the client can show something useful.
         return {"error": str(e)}

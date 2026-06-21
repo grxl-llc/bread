@@ -65,12 +65,13 @@ def _parse_json(text: str) -> dict:
         return {"error": "Failed to parse JSON response", "raw": text}
 
 
-async def guess_recipe_from_image(image_url: str) -> dict:
+async def guess_recipe_from_image(image_url: str, caption: str = "") -> dict:
     """
     Use Claude VISION to guess a recipe from a food photo.
     The image is passed as a real image block (not a text URL), so Claude
-    actually sees the dish. Returns
-    {title, ingredients: [{name, quantity, unit}], instructions: [str]}
+    actually sees the dish. The post caption is used as a strong hint so the
+    recipe matches what the user actually made (e.g. "Cheese Biscuits").
+    Returns {title, ingredients: [{name, quantity, unit}], instructions: [str]}
     """
     client = get_client()
 
@@ -95,12 +96,22 @@ async def guess_recipe_from_image(image_url: str) -> dict:
 
     system = (
         "You are a chef assistant for a cooking app called Bread. "
-        "Given a food photo, identify the dish and produce a best-guess recipe. "
+        "Given a food photo (and the cook's caption), identify the dish and "
+        "produce a best-guess recipe. The recipe MUST include clear step-by-step "
+        "instructions, and the ingredients must reflect the captioned dish "
+        "(e.g. if it says 'Cheese Biscuits', include cheese). "
         "Respond ONLY with valid JSON matching this schema: "
         + json.dumps(schema)
         + ". Use common measurement units (oz, lbs, cups, tbsp, tsp, pcs). "
         "No explanation, no markdown — just the JSON object."
     )
+
+    user_text = "Identify this dish and give a best-guess recipe with steps."
+    if caption and caption.strip():
+        user_text = (
+            f'The cook captioned this dish: "{caption.strip()}". '
+            "Use that as a strong hint for what it is. " + user_text
+        )
 
     # Download the image server-side and send it as base64. This is the most
     # reliable path: it works on any SDK version and doesn't require Anthropic
@@ -126,7 +137,7 @@ async def guess_recipe_from_image(image_url: str) -> dict:
             "role": "user",
             "content": [
                 {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
-                {"type": "text", "text": "Identify this dish and give a best-guess recipe."},
+                {"type": "text", "text": user_text},
             ],
         }],
     )

@@ -96,7 +96,7 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
     setShowAdModal(false);
     setGenerating(true);
     try {
-      const result = await base44.integrations.Core.GuessRecipeFromImage({ image_url: post.media_url });
+      const result = await base44.integrations.Core.GuessRecipeFromImage({ image_url: post.media_url, caption: post.caption });
       if (result?.title) {
         setLocalGuess(result);
         setExpanded(true);
@@ -293,6 +293,14 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
                     {(Array.isArray(aiGuess.ingredients) ? aiGuess.ingredients : []).map((ing, i) => (
                       <p key={i} className="text-xs text-[#C4C4BA]">• {ing.quantity} {ing.unit} {ing.name}</p>
                     ))}
+                    {Array.isArray(aiGuess.instructions) && aiGuess.instructions.length > 0 && (
+                      <>
+                        <p className="text-xs font-semibold text-[#C4C4BA] uppercase tracking-wider pt-2">Steps</p>
+                        {aiGuess.instructions.map((step, i) => (
+                          <p key={i} className="text-xs text-[#C4C4BA] leading-snug">{i + 1}. {step}</p>
+                        ))}
+                      </>
+                    )}
                     <Button
                       onClick={() => onSaveRecipe({ ...post, ai_recipe_guess: aiGuess })}
                       size="sm"

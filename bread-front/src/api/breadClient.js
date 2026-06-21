@@ -164,9 +164,9 @@ const integrations = {
       return request('POST', '/api/llm/invoke', { prompt, response_json_schema });
     },
 
-    // Best-guess recipe from a food photo (Claude vision).
-    async GuessRecipeFromImage({ image_url }) {
-      return request('POST', '/api/llm/guess-recipe', { image_url });
+    // Best-guess recipe from a food photo (Claude vision). Caption is a hint.
+    async GuessRecipeFromImage({ image_url, caption }) {
+      return request('POST', '/api/llm/guess-recipe', { image_url, caption });
     },
 
     async SendEmail({ to, subject, body: emailBody }) {
