@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, Text
+from sqlalchemy import Column, String, Boolean, Integer, Float, DateTime, Text, UniqueConstraint
 from sqlalchemy.dialects.sqlite import JSON
 from app.database import Base
 
@@ -29,6 +29,9 @@ class Recipe(Base):
     nutrition = Column(JSON, nullable=True)     # {calories, protein, carbs, fat}
     tags = Column(JSON, default=list)
     collection_id = Column(String, nullable=True, index=True)
+    # Ratings — denormalized for fast reads
+    rating_sum = Column(Integer, default=0)
+    rating_count = Column(Integer, default=0)
     created_date = Column(DateTime, default=datetime.utcnow, index=True)
 
 
@@ -42,3 +45,22 @@ class RecipeCollection(Base):
     cover_image = Column(String, nullable=True)
     is_public = Column(Boolean, default=False)
     created_date = Column(DateTime, default=datetime.utcnow)
+
+
+class RecipeRating(Base):
+    """
+    One row per (recipe, user) pair.
+    Unique constraint prevents a user from rating the same recipe twice.
+    When a user changes their rating, the old row is updated (upsert).
+    """
+    __tablename__ = "recipe_ratings"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    recipe_id = Column(String, nullable=False, index=True)
+    rated_by = Column(String, nullable=False, index=True)  # user email — login required
+    rating = Column(Integer, nullable=False)               # 1–5
+    created_date = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "rated_by", name="uq_recipe_rating_per_user"),
+    )

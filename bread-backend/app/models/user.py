@@ -62,5 +62,9 @@ class User(Base):
     google_id = Column(String, nullable=True, unique=True)
     apple_id = Column(String, nullable=True, unique=True)
 
+    # Password reset
+    password_reset_token = Column(String, nullable=True, index=True)
+    password_reset_expires = Column(DateTime, nullable=True)
+
     created_date = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

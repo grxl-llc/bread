@@ -34,11 +34,12 @@ async def invoke(
 @router.post("/guess-recipe")
 async def guess_recipe(
     body: GuessRecipeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """
-    Best-guess recipe from a food photo (Claude vision). Auth required — powers
-    the "Best Guess Recipe" feature on social posts.
+    Best-guess recipe from a food photo (Claude vision).
+    Auth is optional — the rewarded ad (client-side) is the gate, not login.
+    Saving the result to a recipe book still requires login (enforced client-side).
     """
     if not body.image_url:
         raise HTTPException(422, "image_url required")

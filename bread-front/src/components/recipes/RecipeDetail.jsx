@@ -8,14 +8,115 @@ import { calculateAndUpdateBadges } from "../badges/badgeUtils";
 import SmartSubstitutionModal from "./SmartSubstitutionModal";
 import NutritionCard from "./NutritionCard";
 import { useRecipeCost } from "@/lib/useRecipeCost";
+import { RATING_MAX } from "@/lib/featureConfig";
 
-export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete, onAddToGrocery, userZip, pantryItems }) {
+// ── Star Rating widget ────────────────────────────────────────────────────────
+
+function StarRating({ recipeId, isPublic, isOwner, currentUser, initialRating, ratingCount, ratingSum, onRated }) {
+  const [hovered, setHovered] = useState(0);
+  const [myRating, setMyRating] = useState(initialRating || 0);
+  const [submitting, setSubmitting] = useState(false);
+  const [localSum, setLocalSum] = useState(ratingSum || 0);
+  const [localCount, setLocalCount] = useState(ratingCount || 0);
+
+  // Fetch the user's existing rating on open.
+  useEffect(() => {
+    if (!currentUser || !recipeId) return;
+    base44.recipes.myRating(recipeId)
+      .then((res) => { if (res?.rating) setMyRating(res.rating); })
+      .catch(() => {});
+  }, [currentUser, recipeId]);
+
+  // Only show the rating widget to:
+  // - public recipes: any logged-in user
+  // - private recipes: the owner only
+  const canRate = currentUser && (isPublic || isOwner);
+  const showRating = localCount > 0 || canRate;
+
+  if (!showRating) return null;
+
+  const avgDisplay = localCount ? (localSum / localCount).toFixed(1) : null;
+  const displayStars = hovered || myRating;
+
+  const handleRate = async (star) => {
+    if (!canRate || submitting) return;
+    setSubmitting(true);
+    try {
+      const oldRating = myRating;
+      const res = await base44.recipes.rate(recipeId, star);
+      if (res?.ok) {
+        // Update local tallies optimistically.
+        if (oldRating) {
+          setLocalSum((s) => s - oldRating + star);
+          // count stays the same (update, not new)
+        } else {
+          setLocalSum((s) => s + star);
+          setLocalCount((c) => c + 1);
+        }
+        setMyRating(star);
+        onRated?.();
+      }
+    } catch (e) {
+      console.warn("Rating failed:", e?.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="bg-[#1A2744] rounded-xl px-4 py-3 mb-4">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm text-[#F5F5F0] font-medium">
+          {isPublic ? "Community rating" : "My rating"}
+        </span>
+        {avgDisplay && (
+          <span className="text-xs text-[#C4C4BA]">
+            {avgDisplay} / {RATING_MAX} · {localCount} {localCount === 1 ? "rating" : "ratings"}
+          </span>
+        )}
+      </div>
+
+      {canRate ? (
+        <div className="flex items-center gap-1 mt-1">
+          {Array.from({ length: RATING_MAX }, (_, i) => i + 1).map((star) => (
+            <button
+              key={star}
+              onMouseEnter={() => setHovered(star)}
+              onMouseLeave={() => setHovered(0)}
+              onClick={() => handleRate(star)}
+              disabled={submitting}
+              className="text-2xl leading-none transition-transform hover:scale-110 disabled:opacity-50"
+            >
+              <span className={star <= displayStars ? "text-yellow-400" : "text-[#C4C4BA]/25"}>★</span>
+            </button>
+          ))}
+          {submitting && <Loader2 className="w-4 h-4 ml-1 animate-spin text-[#C4C4BA]/50" />}
+          {myRating > 0 && !submitting && (
+            <span className="text-xs text-[#C4C4BA]/60 ml-2">Your rating: {myRating}</span>
+          )}
+        </div>
+      ) : localCount > 0 ? (
+        // Read-only display for non-ratable viewers (e.g. not logged in on public recipe)
+        <div className="flex items-center gap-0.5 mt-1">
+          {Array.from({ length: RATING_MAX }, (_, i) => i + 1).map((star) => (
+            <span key={star} className={`text-xl ${star <= Math.round(localSum / localCount) ? "text-yellow-400" : "text-[#C4C4BA]/25"}`}>★</span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete, onAddToGrocery, userZip, pantryItems, readOnly }) {
   const [editMode, setEditMode] = useState(false);
   const [editedRecipe, setEditedRecipe] = useState(recipe);
   const [saving, setSaving] = useState(false);
   const [findingAlternative, setFindingAlternative] = useState(null);
   const [substitutionModalOpen, setSubstitutionModalOpen] = useState(false);
   const [selectedIngredientIndex, setSelectedIngredientIndex] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [brandQuery, setBrandQuery] = useState("");
   const [brandResults, setBrandResults] = useState([]);
@@ -27,6 +128,10 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
 
   // Keep the edit buffer in sync when a different recipe opens.
   useEffect(() => { setEditedRecipe(recipe); setEditMode(false); }, [recipe?.id]);
+
+  useEffect(() => {
+    base44.auth.me().then(setCurrentUser).catch(() => {});
+  }, []);
 
   // Live brand search for the picker — searches the GENERIC keyword so every
   // brand shows up (not just products matching the full marketing name).
@@ -53,6 +158,8 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
 
   if (!open || !recipe) return null;
 
+  const isOwner = currentUser && recipe.created_by === currentUser.email;
+
   // Per-ingredient cost lookup + "already have" set, keyed by name.
   const costByName = {};
   (costData?.ingredients || []).forEach((c) => { costByName[(c.name || "").toLowerCase()] = c; });
@@ -68,6 +175,7 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
   };
 
   const handleIngredientClick = (index) => {
+    if (readOnly) return;
     const ing = recipe.ingredients?.[index] || {};
     setSelectedIngredientIndex(index);
     setBrandQuery(ing.search_term || guessKeyword(ing.name));
@@ -142,6 +250,7 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
   };
 
   const togglePublic = async () => {
+    if (readOnly) return;
     await base44.entities.Recipe.update(recipe.id, { is_public: !recipe.is_public });
     onUpdate();
     // Recalculate badges after making recipe public
@@ -152,6 +261,7 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
   };
 
   const toggleFavoriteIngredient = async (index) => {
+    if (readOnly) return;
     const updatedIngredients = [...recipe.ingredients];
     updatedIngredients[index] = {
       ...updatedIngredients[index],
@@ -248,60 +358,75 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
               )}
             </div>
 
-            {/* Public Toggle */}
-            <div className="bg-[#1A2744] rounded-xl px-4 py-3 mb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-[#C4C4BA]" />
-                  <span className="text-sm text-[#F5F5F0]">Make recipe public</span>
-                </div>
-                <Switch checked={recipe.is_public} onCheckedChange={togglePublic} />
-              </div>
-              <p className="text-xs text-[#C4C4BA]/60 mt-1">
-                Public recipes appear on your profile for others to see
-              </p>
-            </div>
+            {/* ── Star Rating ── */}
+            <StarRating
+              recipeId={recipe.id}
+              isPublic={recipe.is_public}
+              isOwner={isOwner}
+              currentUser={currentUser}
+              ratingSum={recipe.rating_sum}
+              ratingCount={recipe.rating_count}
+              onRated={onUpdate}
+            />
 
-            {/* Action Buttons */}
-            <div className="flex gap-2 mb-6">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleDuplicate}
-                className="border-[#243352] text-[#C4C4BA] hover:bg-[#1A2744] rounded-xl"
-              >
-                <Copy className="w-4 h-4 mr-1" />
-                Duplicate
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setEditMode(!editMode)}
-                className="border-[#243352] text-[#C4C4BA] hover:bg-[#1A2744] rounded-xl"
-              >
-                <Edit className="w-4 h-4 mr-1" />
-                Edit
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => onAddToGrocery(recipe)}
-                className="bg-[#FF6B35] hover:bg-[#FF8555] text-white rounded-xl"
-              >
-                <ShoppingCart className="w-4 h-4 mr-1" />
-                Grocery List
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleDelete}
-                className="border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-xl ml-auto"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
+            {/* Public Toggle — owners only */}
+            {!readOnly && isOwner && (
+              <div className="bg-[#1A2744] rounded-xl px-4 py-3 mb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-[#C4C4BA]" />
+                    <span className="text-sm text-[#F5F5F0]">Make recipe public</span>
+                  </div>
+                  <Switch checked={recipe.is_public} onCheckedChange={togglePublic} />
+                </div>
+                <p className="text-xs text-[#C4C4BA]/60 mt-1">
+                  Public recipes appear on your profile and in recipe search
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons — owners only */}
+            {!readOnly && isOwner && (
+              <div className="flex gap-2 mb-6">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDuplicate}
+                  className="border-[#243352] text-[#C4C4BA] hover:bg-[#1A2744] rounded-xl"
+                >
+                  <Copy className="w-4 h-4 mr-1" />
+                  Duplicate
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditMode(!editMode)}
+                  className="border-[#243352] text-[#C4C4BA] hover:bg-[#1A2744] rounded-xl"
+                >
+                  <Edit className="w-4 h-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => onAddToGrocery(recipe)}
+                  className="bg-[#FF6B35] hover:bg-[#FF8555] text-white rounded-xl"
+                >
+                  <ShoppingCart className="w-4 h-4 mr-1" />
+                  Grocery List
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDelete}
+                  className="border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-xl ml-auto"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
 
             {/* Inline Edit Form */}
-            {editMode && (
+            {editMode && !readOnly && isOwner && (
               <div className="bg-[#1A2744] rounded-xl p-4 mb-6 space-y-3">
                 <div>
                   <label className="text-xs text-[#C4C4BA]/60 mb-1 block">Photo</label>
@@ -387,19 +512,21 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
                   <div
                     key={i}
                     onClick={() => handleIngredientClick(i)}
-                    className="flex items-center justify-between bg-[#1A2744] rounded-xl px-4 py-3 cursor-pointer hover:bg-[#243352] transition"
+                    className={`flex items-center justify-between bg-[#1A2744] rounded-xl px-4 py-3 ${!readOnly ? "cursor-pointer hover:bg-[#243352] transition" : ""}`}
                   >
                     <div className="flex items-center gap-3">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavoriteIngredient(i);
-                        }}
-                      >
-                        <Heart
-                          className={`w-4 h-4 ${ing.is_favorite ? "fill-red-500 text-red-500" : "text-[#C4C4BA]/30"}`}
-                        />
-                      </button>
+                      {!readOnly && isOwner && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavoriteIngredient(i);
+                          }}
+                        >
+                          <Heart
+                            className={`w-4 h-4 ${ing.is_favorite ? "fill-red-500 text-red-500" : "text-[#C4C4BA]/30"}`}
+                          />
+                        </button>
+                      )}
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-[#F5F5F0]">{ing.name}</span>
@@ -468,7 +595,7 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
           </div>
 
           {/* Brand picker — search any keyword, swap to any brand (live prices) */}
-          {substitutionModalOpen && selectedIngredientIndex != null && (() => {
+          {substitutionModalOpen && selectedIngredientIndex != null && !readOnly && (() => {
             const ing = recipe.ingredients?.[selectedIngredientIndex] || {};
             const eff = (p) => (p.sale_price != null ? p.sale_price : p.price);
             const list = brandResults.filter((p) => eff(p) != null);

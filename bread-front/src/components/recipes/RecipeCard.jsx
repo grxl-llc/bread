@@ -2,6 +2,19 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Clock, DollarSign, MapPin, Sparkles, Loader2 } from "lucide-react";
 import { useRecipeCost } from "@/lib/useRecipeCost";
+import { RATING_MAX } from "@/lib/featureConfig";
+
+function StarBadge({ ratingSum, ratingCount }) {
+  if (!ratingCount) return null;
+  const avg = ratingSum / ratingCount;
+  const full = Math.round(avg);
+  return (
+    <span className="flex items-center gap-0.5 text-[10px] text-yellow-400 leading-none">
+      {"★".repeat(Math.min(full, RATING_MAX))}{"☆".repeat(Math.max(0, RATING_MAX - full))}
+      <span className="text-[#C4C4BA] ml-0.5">{avg.toFixed(1)}</span>
+    </span>
+  );
+}
 
 export default function RecipeCard({ recipe, onClick, userZip, pantryItems }) {
   const { data: cost, isLoading: costLoading } = useRecipeCost(recipe, userZip, pantryItems);
@@ -65,6 +78,9 @@ export default function RecipeCard({ recipe, onClick, userZip, pantryItems }) {
             </span>
           )}
         </div>
+
+        {/* Star rating — only shown when at least one rating exists */}
+        <StarBadge ratingSum={recipe.rating_sum} ratingCount={recipe.rating_count} />
       </div>
     </motion.div>
   );

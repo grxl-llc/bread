@@ -1,39 +1,39 @@
 import { base44 } from "@/api/base44Client";
 
 export const AdService = {
-  // Log ad impression
-  async logImpression(userId, adType) {
+  /** Log an ad impression. user_id and post_id are both optional (anon viewers allowed). */
+  async logImpression(userId, adType, postId = null) {
     try {
       await base44.entities.AdAnalytics.create({
-        user_id: userId,
+        user_id: userId || null,
+        post_id: postId || null,
         ad_type: adType,
         event_type: "impression",
       });
     } catch (error) {
-      console.error("Failed to log ad impression:", error);
+      // Never let analytics logging break the ad flow.
+      console.warn("Ad impression log failed (non-fatal):", error?.message);
     }
   },
 
-  // Log rewarded ad completion
-  async logCompletion(userId, adType) {
+  /** Log ad completion. user_id and post_id are both optional. */
+  async logCompletion(userId, adType, postId = null) {
     try {
       await base44.entities.AdAnalytics.create({
-        user_id: userId,
+        user_id: userId || null,
+        post_id: postId || null,
         ad_type: adType,
         event_type: "completion",
       });
     } catch (error) {
-      console.error("Failed to log ad completion:", error);
+      console.warn("Ad completion log failed (non-fatal):", error?.message);
     }
   },
 
-  // Simulate watching a rewarded ad
+  /** Simulate watching a rewarded ad (3 seconds). Returns true on success. */
   async watchRewardedAd() {
     return new Promise((resolve) => {
-      // Simulate ad playback (3 seconds)
-      setTimeout(() => {
-        resolve(true);
-      }, 3000);
+      setTimeout(() => resolve(true), 3000);
     });
   },
 };

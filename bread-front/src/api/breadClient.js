@@ -104,6 +104,14 @@ const auth = {
   isAuthenticated() {
     return !!getToken();
   },
+
+  async forgotPassword(email) {
+    return request('POST', '/api/auth/forgot-password', { email });
+  },
+
+  async resetPassword(token, newPassword) {
+    return request('POST', '/api/auth/reset-password', { token, new_password: newPassword });
+  },
 };
 
 // ── Entity builder ────────────────────────────────────────────────────────────
@@ -231,6 +239,29 @@ const pricing = {
   },
 };
 
+// ── Recipe search & ratings ───────────────────────────────────────────────────
+
+const recipes = {
+  /** Full-text search across public recipes. No auth required. */
+  async search(q = '', limit = 50) {
+    const params = new URLSearchParams({ q, limit });
+    return request('GET', `/api/recipes/search?${params}`);
+  },
+
+  /**
+   * Rate a recipe 1–5. Login required.
+   * Returns { ok, avg_rating, rating_count, your_rating }.
+   */
+  async rate(recipeId, rating) {
+    return request('POST', `/api/recipes/${recipeId}/rate`, { rating });
+  },
+
+  /** Get the current user's rating for a recipe (null if not rated). */
+  async myRating(recipeId) {
+    return request('GET', `/api/recipes/${recipeId}/my-rating`);
+  },
+};
+
 // ── App logs (no-op stub) ─────────────────────────────────────────────────────
 // Base44 had a usage-analytics surface (appLogs). We don't track that yet, so
 // these are safe no-ops that return a resolved promise to satisfy callers.
@@ -240,4 +271,4 @@ const appLogs = {
 
 // ── Exported client ───────────────────────────────────────────────────────────
 
-export const breadClient = { auth, entities, integrations, live, pricing, appLogs };
+export const breadClient = { auth, entities, integrations, live, pricing, recipes, appLogs };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Heart, MessageCircle, Sparkles, ChevronDown, ChevronUp, BookmarkPlus, MoreVertical, Edit2, Trash2, ExternalLink, Loader2 } from "lucide-react";
+import { Heart, MessageCircle, Sparkles, ChevronDown, ChevronUp, BookmarkPlus, MoreVertical, Edit2, Trash2, ExternalLink, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,6 +12,7 @@ import CommentModal from "./CommentModal";
 import RewardedAdModal from "../ads/RewardedAdModal";
 import { useEffectiveZip } from "@/lib/location";
 import { useRecipeCost } from "@/lib/useRecipeCost";
+import { AD_UNLOCK_STORAGE_PREFIX } from "@/lib/featureConfig";
 
 export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, currentUserEmail }) {
   const [expanded, setExpanded] = useState(false);
@@ -25,12 +26,17 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
   const [showAdModal, setShowAdModal] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [localGuess, setLocalGuess] = useState(null);
+  // Per-post unlock tracked in localStorage — no account needed to unlock.
+  const [isUnlocked, setIsUnlocked] = useState(
+    () => localStorage.getItem(`${AD_UNLOCK_STORAGE_PREFIX}${post.id}`) === "1"
+  );
   const videoRef = useRef(null);
   const navigate = useNavigate();
 
-  // The guess shown: a freshly generated one, or whatever's stored on the post.
+  // Recipe shown: freshly generated this session OR stored on the post.
   const aiGuess = localGuess || post.ai_recipe_guess;
-  const hasAiRecipe = aiGuess?.title;
+  // Only reveal the recipe if this browser has watched the ad for this post.
+  const hasAiRecipe = isUnlocked && aiGuess?.title;
   const isOwnPost = currentUserEmail && post.created_by === currentUserEmail;
   const isVideo = post.media_url && (
     post.media_url.includes(".mp4") ||
@@ -39,6 +45,9 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
     post.media_url.includes(".webm")
   );
   const isClip = isVideo && post.tutorial_id;
+
+  // Show the "Best Guess" button on photo posts that aren't yet unlocked by this browser.
+  const canShowAdButton = post.media_url && !isVideo && !isUnlocked;
 
   useEffect(() => {
     base44.auth.me().then(setCurrentUser).catch(() => {});
@@ -87,49 +96,65 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
     },
   });
 
-  // Live pricing + pantry on the AI guess, so the feed can show
-  // "you have X of Y · est. $Z" — the hook that makes people save & cook.
+  // Live pricing + pantry on the AI guess — only runs after unlock and when logged in.
   const effectiveZip = useEffectiveZip(currentUser);
   const { data: pantryItems = [] } = useQuery({
     queryKey: ["pantryItems-feed"],
     queryFn: () => base44.entities.PantryItem.list("-created_date", 200),
     enabled: !!currentUser,
   });
-  const guessRecipe = aiGuess?.ingredients ? { id: post.id, ingredients: aiGuess.ingredients } : null;
+  const guessRecipe = hasAiRecipe && aiGuess?.ingredients
+    ? { id: post.id, ingredients: aiGuess.ingredients }
+    : null;
   const { data: guessCost } = useRecipeCost(guessRecipe, effectiveZip, pantryItems);
 
   const guessTotalCount = Array.isArray(aiGuess?.ingredients) ? aiGuess.ingredients.length : 0;
   const guessHaveCount = guessCost?.already_have?.length || 0;
 
-  // "Best Guess Recipe": gated behind a rewarded video ad, then Claude vision
-  // reads the photo into a recipe that's saved on the post + savable to profile.
+  // Anyone can open the ad modal — no login check here.
   const handleBestGuessClick = () => {
-    if (!currentUser) { setShowSignUpPrompt(true); return; }
     setShowAdModal(true);
   };
 
   const handleAdComplete = async () => {
     setShowAdModal(false);
+
+    // Mark this post as unlocked for this browser session.
+    localStorage.setItem(`${AD_UNLOCK_STORAGE_PREFIX}${post.id}`, "1");
+    setIsUnlocked(true);
+
+    // If the recipe was already generated and stored on the post, just reveal it.
+    if (post.ai_recipe_guess?.title) {
+      setExpanded(true);
+      return;
+    }
+
+    // Otherwise generate the recipe now.
     setGenerating(true);
     try {
-      const result = await base44.integrations.Core.GuessRecipeFromImage({ image_url: post.media_url, caption: post.caption });
+      const result = await base44.integrations.Core.GuessRecipeFromImage({
+        image_url: post.media_url,
+        caption: post.caption,
+      });
       if (result?.title) {
         setLocalGuess(result);
         setExpanded(true);
-        // Persist onto the post so it shows for everyone next time (best-effort).
+        // Persist onto the post so next unlock for this post skips re-generation.
         base44.entities.Post.update(post.id, { ai_recipe_guess: result }).catch(() => {});
       } else {
         alert(result?.error || "Couldn't read a recipe from this photo — try a clearer food pic.");
+        // Revert unlock so the user can try again.
+        localStorage.removeItem(`${AD_UNLOCK_STORAGE_PREFIX}${post.id}`);
+        setIsUnlocked(false);
       }
     } catch (e) {
       alert(e?.message || "Recipe generation is unavailable right now.");
+      localStorage.removeItem(`${AD_UNLOCK_STORAGE_PREFIX}${post.id}`);
+      setIsUnlocked(false);
     } finally {
       setGenerating(false);
     }
   };
-
-  // Show the generate button only on photo posts (not video) that have no guess yet.
-  const canGuess = post.media_url && !isVideo && !hasAiRecipe;
 
   return (
     <div className="relative w-full h-[calc(100svh-120px)] bg-[#0A1220] flex-shrink-0 snap-start overflow-hidden">
@@ -269,8 +294,8 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
         {/* Caption */}
         <p className="text-sm text-white/90 leading-snug mb-2 line-clamp-2">{post.caption}</p>
 
-        {/* Best Guess Recipe — generate button (no guess yet) */}
-        {canGuess && (
+        {/* Best Guess button — watch ad to unlock (anyone can tap, no login needed) */}
+        {canShowAdButton && (
           <button
             onClick={handleBestGuessClick}
             disabled={generating}
@@ -284,7 +309,7 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
           </button>
         )}
 
-        {/* AI Recipe toggle — once a guess exists */}
+        {/* AI Recipe — shown only after this browser has watched the ad */}
         {hasAiRecipe && (
           <div>
             <button
@@ -318,8 +343,8 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
                       </>
                     )}
 
-                    {/* Pantry + price hook — "you have X of Y · est $Z" */}
-                    {guessCost && guessTotalCount > 0 && (
+                    {/* Pantry + price hook — only shown to logged-in users */}
+                    {currentUser && guessCost && guessTotalCount > 0 && (
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10 text-[11px]">
                         <span className="text-[#34D399] font-medium">
                           ✓ You have {guessHaveCount} of {guessTotalCount} ingredients
@@ -330,14 +355,27 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
                       </div>
                     )}
 
-                    <Button
-                      onClick={() => onSaveRecipe({ ...post, ai_recipe_guess: aiGuess })}
-                      size="sm"
-                      className="w-full bg-[#FF6B35] hover:bg-[#FF8555] text-white rounded-lg mt-1"
-                    >
-                      <BookmarkPlus className="w-3.5 h-3.5 mr-1.5" />
-                      Save to My Recipes
-                    </Button>
+                    {/* Save to My Recipes — requires login */}
+                    {currentUser ? (
+                      <Button
+                        onClick={() => onSaveRecipe({ ...post, ai_recipe_guess: aiGuess })}
+                        size="sm"
+                        className="w-full bg-[#FF6B35] hover:bg-[#FF8555] text-white rounded-lg mt-1"
+                      >
+                        <BookmarkPlus className="w-3.5 h-3.5 mr-1.5" />
+                        Save to My Recipes
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setShowSignUpPrompt(true)}
+                        size="sm"
+                        variant="outline"
+                        className="w-full border-white/20 text-[#C4C4BA] rounded-lg mt-1 hover:bg-white/5"
+                      >
+                        <Lock className="w-3.5 h-3.5 mr-1.5" />
+                        Sign up to Save
+                      </Button>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -353,31 +391,39 @@ export default function PostCard({ post, onSaveRecipe, onEdit, onDelete, current
         currentUser={currentUser}
       />
 
-      {/* Watch-an-ad gate before generating the best-guess recipe */}
+      {/* Rewarded ad gate — no login check, anyone can watch */}
       <RewardedAdModal
         open={showAdModal}
         onClose={() => setShowAdModal(false)}
         onComplete={handleAdComplete}
-        userId={currentUser?.id}
+        userId={currentUser?.id ?? null}
+        postId={post.id}
         title="Unlock the recipe"
         subtitle="Watch a short ad to reveal the AI recipe for this dish"
       />
 
-      {/* Sign Up Prompt Modal */}
+      {/* Sign-up prompt for save / like / comment */}
       {showSignUpPrompt && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-[#1A2744] rounded-2xl max-w-sm w-full p-6 text-center">
-            <p className="text-[#F5F5F0] font-semibold mb-4">Sign up to use this feature</p>
+            <p className="text-[#F5F5F0] font-semibold mb-2">Create a free account</p>
+            <p className="text-[#C4C4BA]/70 text-sm mb-5">Save recipes, like posts, and track what's in your pantry.</p>
             <div className="space-y-3">
               <button
                 onClick={() => navigate("/signup")}
                 className="w-full bg-[#FF6B35] text-white font-semibold py-3 rounded-xl hover:bg-[#FF8555] transition"
               >
-                Sign Up
+                Sign Up — It's Free
+              </button>
+              <button
+                onClick={() => navigate("/signin")}
+                className="w-full bg-transparent border border-white/20 text-[#C4C4BA] font-medium py-3 rounded-xl hover:bg-white/5 transition"
+              >
+                Sign In
               </button>
               <button
                 onClick={() => setShowSignUpPrompt(false)}
-                className="w-full bg-[#243352] text-[#C4C4BA] font-medium py-3 rounded-xl hover:bg-[#2A3F54] transition"
+                className="w-full text-[#C4C4BA]/50 text-sm py-2"
               >
                 Continue browsing
               </button>

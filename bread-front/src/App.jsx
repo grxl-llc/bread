@@ -27,6 +27,9 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import PostSignupOnboarding from './pages/PostSignupOnboarding';
 import RegisterPage from './pages/RegisterPage';
 import SignInPage from './pages/SignInPage';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import RecipeSearch from './pages/RecipeSearch';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -98,6 +101,11 @@ const AuthenticatedApp = () => {
       <Route path="/login" element={<SignIn />} />
       <Route path="/signin" element={<SignInPage />} />
       <Route path="/signup" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/RecipeSearch" element={
+        <LayoutWrapper currentPageName="RecipeSearch"><RecipeSearch /></LayoutWrapper>
+      } />
       <Route path="/post-signup-onboarding" element={<PostSignupOnboarding />} />
       <Route path="/" element={
         <LayoutWrapper currentPageName="Home">

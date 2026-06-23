@@ -4,7 +4,7 @@ import { X, Play, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdService } from "./AdService";
 
-export default function RewardedAdModal({ open, onClose, onComplete, userId, title, subtitle }) {
+export default function RewardedAdModal({ open, onClose, onComplete, userId, postId, title, subtitle }) {
   const [watching, setWatching] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [adFailed, setAdFailed] = useState(false);
@@ -14,18 +14,18 @@ export default function RewardedAdModal({ open, onClose, onComplete, userId, tit
     setAdFailed(false);
 
     try {
-      await AdService.logImpression(userId, "rewarded_ad");
-      
+      await AdService.logImpression(userId, "rewarded_ad", postId);
+
       // Simulate ad watching
       const adSuccess = await AdService.watchRewardedAd();
-      
+
       if (!adSuccess) {
         setAdFailed(true);
         setWatching(false);
         return;
       }
 
-      await AdService.logCompletion(userId, "rewarded_ad");
+      await AdService.logCompletion(userId, "rewarded_ad", postId);
       setWatching(false);
       setCompleted(true);
 

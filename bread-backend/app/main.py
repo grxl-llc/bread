@@ -19,6 +19,7 @@ from app.routers.live import router as live_router
 from app.routers.pricing import router as pricing_router
 from app.routers.kroger import router as kroger_router
 from app.routers.basket import router as basket_router
+from app.routers.recipe_search import router as recipe_search_router
 
 setup_logging()
 
@@ -41,8 +42,9 @@ app.include_router(upload_router,   prefix="/api")
 app.include_router(llm_router,      prefix="/api")
 app.include_router(live_router,     prefix="/api")
 app.include_router(pricing_router,  prefix="/api")
-app.include_router(kroger_router,   prefix="/api")
-app.include_router(basket_router,   prefix="/api")
+app.include_router(kroger_router,        prefix="/api")
+app.include_router(basket_router,        prefix="/api")
+app.include_router(recipe_search_router, prefix="/api")
 
 
 @app.on_event("startup")

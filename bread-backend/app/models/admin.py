@@ -114,3 +114,18 @@ class BrandApplication(Base):
     budget_range = Column(String, nullable=True)
     status = Column(String, default="pending")
     created_date = Column(DateTime, default=datetime.utcnow)
+
+
+class AdAnalytics(Base):
+    """
+    Tracks impression and completion events for rewarded ads.
+    user_id is nullable — logged-out users can watch ads too.
+    """
+    __tablename__ = "ad_analytics"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    post_id = Column(String, nullable=True, index=True)   # post the ad unlocked
+    user_id = Column(String, nullable=True, index=True)   # null for anonymous viewers
+    ad_type = Column(String, nullable=True)               # e.g. "rewarded_ad"
+    event_type = Column(String, nullable=True)            # "impression" | "completion"
+    created_date = Column(DateTime, default=datetime.utcnow, index=True)

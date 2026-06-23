@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Calendar, CalendarDays, Video } from "lucide-react";
+import { Plus, Calendar, CalendarDays, Video, Search } from "lucide-react";
 
 import RecipeCard from "../components/recipes/RecipeCard";
 import RecipeDetail from "../components/recipes/RecipeDetail";
@@ -101,14 +101,23 @@ export default function Recipes() {
 
   return (
     <div className="min-h-screen bg-[#15233A]">
-      <div className="pt-6 px-5 pb-4">
-        <h1 className="text-2xl font-bold text-[#F5F5F0] mb-1">My Recipes</h1>
-        <p className="text-sm text-[#C4C4BA]/60">Save, plan, and cook</p>
+      <div className="pt-6 px-5 pb-4 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[#F5F5F0] mb-1">My Recipes</h1>
+          <p className="text-sm text-[#C4C4BA]/60">Save, plan, and cook</p>
+        </div>
+        <button
+          onClick={() => navigate(createPageUrl("RecipeSearch"))}
+          className="flex items-center gap-1.5 bg-[#1A2744] border border-white/10 rounded-xl px-3 py-2 text-xs text-[#C4C4BA] hover:border-[#FF6B35]/50 hover:text-[#FF6B35] transition-colors mt-1"
+        >
+          <Search className="w-3.5 h-3.5" />
+          Search
+        </button>
       </div>
 
       <PullToRefresh onRefresh={() => queryClient.invalidateQueries()}>
       <Tabs defaultValue="recipes" className="px-4">
-        <TabsList className="bg-[#1A2744] border border-[#243352] rounded-xl p-1 mb-4 w-full grid grid-cols-4">
+        <TabsList className="bg-[#1A2744] border border-[#243352] rounded-xl p-1 mb-4 w-full grid grid-cols-5">
         <TabsTrigger
           value="recipes"
           className="data-[state=active]:bg-[#FF6B35] data-[state=active]:text-white rounded-lg text-xs"
@@ -134,6 +143,14 @@ export default function Recipes() {
           className="data-[state=active]:bg-[#FF6B35] data-[state=active]:text-white rounded-lg text-xs"
         >
           Collections
+        </TabsTrigger>
+        <TabsTrigger
+          value="search"
+          className="data-[state=active]:bg-[#FF6B35] data-[state=active]:text-white rounded-lg text-xs"
+          onClick={() => navigate(createPageUrl("RecipeSearch"))}
+        >
+          <Search className="w-3 h-3 mr-1" />
+          Search
         </TabsTrigger>
         </TabsList>
 

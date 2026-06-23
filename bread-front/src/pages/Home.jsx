@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 
 import CategoryBar from "../components/feed/CategoryBar";
 import PostCard from "../components/feed/PostCard";
@@ -68,7 +69,18 @@ export default function Home() {
     <div className="min-h-screen bg-[#15233A] flex flex-col">
       {/* Sticky top area: header + share prompt + categories */}
       <div className="flex-shrink-0">
-        <div className="pt-4 px-5 pb-2">
+        <div className="pt-4 px-5 pb-2 space-y-2">
+          {/* Recipe search shortcut */}
+          <button
+            onClick={() => navigate(createPageUrl("RecipeSearch"))}
+            className="w-full bg-[#1A2744] border border-white/5 rounded-2xl px-4 py-2.5 flex items-center gap-3 hover:bg-[#243352] transition"
+          >
+            <div className="w-7 h-7 rounded-full bg-[#FF6B35]/15 flex items-center justify-center">
+              <Search className="w-3.5 h-3.5 text-[#FF6B35]" />
+            </div>
+            <span className="text-sm text-[#C4C4BA]/50">Search community recipes…</span>
+          </button>
+
           {/* Share prompt */}
           <button
             onClick={() => user ? setShowCreatePost(true) : setShowSignUpPrompt(true)}

@@ -60,6 +60,7 @@ import Notifications from './pages/Notifications';
 import Onboarding from './pages/Onboarding';
 import Pantry from './pages/Pantry';
 import Recipes from './pages/Recipes';
+import RecipeSearch from './pages/RecipeSearch';
 import Settings from './pages/Settings';
 import Tutorials from './pages/Tutorials';
 import UserProfile from './pages/UserProfile';
@@ -80,6 +81,7 @@ export const PAGES = {
     "Onboarding": Onboarding,
     "Pantry": Pantry,
     "Recipes": Recipes,
+    "RecipeSearch": RecipeSearch,
     "Settings": Settings,
     "Tutorials": Tutorials,
     "UserProfile": UserProfile,

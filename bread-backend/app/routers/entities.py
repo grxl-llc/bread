@@ -27,10 +27,11 @@ from app.auth.dependencies import get_current_user, get_optional_user
 from app.models import (
     User, Post, Comment, Like, Follow, Notification, Message,
     Tutorial, LiveSession, CreatorEarnings, SavedTutorial,
-    Recipe, RecipeCollection,
+    Recipe, RecipeCollection, RecipeRating,
     PantryItem, GroceryList, Ingredient, ProductPrice,
     Ad, ApprovedAd, BrandSponsorship,
     Brand, BrandPartner, CreatorApplication, BrandApplication,
+    AdAnalytics,
 )
 
 router = APIRouter(prefix="/entities", tags=["entities"])
@@ -64,6 +65,10 @@ ENTITY_MAP = {
     "BrandPartner":        (BrandPartner,        False,  None),
     "CreatorApplication":  (CreatorApplication,  True,   "user_email"),
     "BrandApplication":    (BrandApplication,    False,  None),
+    # Analytics
+    "AdAnalytics":         (AdAnalytics,         False,  None),
+    # Ratings (auth required — see recipe_ratings router for the rate endpoint)
+    "RecipeRating":        (RecipeRating,        True,   None),
 }
 
 # Fields that should never be returned for User entity (security)

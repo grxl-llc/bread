@@ -1,4 +1,5 @@
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
@@ -147,3 +148,63 @@ def update_me(
 def logout():
     # JWT is stateless — client drops the token. Nothing to do server-side.
     return {"ok": True}
+
+
+# ── Password Reset ─────────────────────────────────────────────────────────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/forgot-password")
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Generate a password-reset token for the given email.
+    In production this would send an email; for now it returns the token
+    directly so you can test the full flow immediately.
+    """
+    user = db.query(User).filter(User.email == body.email.lower()).first()
+
+    # Always return 200 — don't leak whether the email exists.
+    if not user:
+        return {"ok": True, "message": "If that email is registered, a reset link has been sent."}
+
+    token = secrets.token_urlsafe(32)
+    user.password_reset_token = token
+    user.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+    db.commit()
+
+    # TODO: swap this for a real email once SES / SendGrid is configured.
+    # For now we return the token in the response so you can test immediately.
+    return {
+        "ok": True,
+        "message": "If that email is registered, a reset link has been sent.",
+        "dev_token": token,  # ← remove this line before going fully public
+    }
+
+
+@router.post("/reset-password")
+def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Validate the reset token and set a new password."""
+    if not body.new_password or len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    user = db.query(User).filter(User.password_reset_token == body.token).first()
+
+    if not user or not user.password_reset_expires:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+
+    if datetime.utcnow() > user.password_reset_expires:
+        raise HTTPException(status_code=400, detail="Reset token has expired. Please request a new one.")
+
+    user.password_hash = hash_password(body.new_password)
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    db.commit()
+
+    return {"ok": True, "message": "Password updated successfully."}
