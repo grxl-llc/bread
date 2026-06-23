@@ -97,8 +97,40 @@ export default function UserProfile() {
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    await base44.auth.updateMe({ avatar_url: file_url });
+
+    // Resize + compress client-side so the base64 fallback stays small
+    const resizeToDataUrl = (f) =>
+      new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const size = 256;
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext("2d");
+            // Crop to square from center
+            const min = Math.min(img.width, img.height);
+            const sx = (img.width - min) / 2;
+            const sy = (img.height - min) / 2;
+            ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+            resolve(canvas.toDataURL("image/jpeg", 0.75));
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(f);
+      });
+
+    try {
+      // Try S3 first
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      await base44.auth.updateMe({ avatar_url: file_url });
+    } catch {
+      // S3 not configured yet — fall back to compressed base64 data URL
+      const dataUrl = await resizeToDataUrl(file);
+      await base44.auth.updateMe({ avatar_url: dataUrl });
+    }
     await loadUser();
   };
 

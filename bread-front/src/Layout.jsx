@@ -6,12 +6,20 @@ import { base44 } from "@/api/base44Client";
 import BreadLogo from "./components/branding/BreadLogo";
 import RouteTransition from "./components/shared/RouteTransition";
 
-const tabs = [
-{ name: "Feed", icon: Home, page: "Home" },
+const BASE_TABS = [
+  { name: "Feed", icon: Home, page: "Home" },
   { name: "My Recipes", icon: BookOpen, page: "Recipes" },
   { name: "Pantry", icon: Package, page: "Pantry" },
   { name: "Grocery", icon: ShoppingCart, page: "GroceryList" },
-  { name: "User", icon: User, page: "UserProfile" },
+  { name: "Profile", icon: User, page: "UserProfile" },
+];
+
+const ADMIN_TABS = [
+  { name: "Feed", icon: Home, page: "Home" },
+  { name: "My Recipes", icon: BookOpen, page: "Recipes" },
+  { name: "Pantry", icon: Package, page: "Pantry" },
+  { name: "Grocery", icon: ShoppingCart, page: "GroceryList" },
+  { name: "Admin", icon: Shield, page: "AdminDashboard" },
 ];
 
 export default function Layout({ children, currentPageName }) {
@@ -23,7 +31,8 @@ export default function Layout({ children, currentPageName }) {
   }, []);
 
   const hideNav = currentPageName === "Onboarding";
-  const isAdmin = user?.email === "grxl.llc@gmail.com";
+  const isAdmin = user?.is_admin || user?.email === "grxl.llc@gmail.com";
+  const tabs = isAdmin ? ADMIN_TABS : BASE_TABS;
 
   const handleTabClick = (e, page) => {
     if (!user && page !== "Home") {
@@ -78,17 +87,6 @@ export default function Layout({ children, currentPageName }) {
       {!hideNav && (
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#0A1220] border-t border-white/5 backdrop-blur-xl" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
           <div className="max-w-lg mx-auto flex items-center justify-around px-2 py-2">
-            {isAdmin && (
-            <Link
-              to="/AdminDashboard"
-              className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl tab-transition ${
-                currentPageName === "AdminDashboard" ? "text-[#FF6B35]" : "text-[#C4C4BA]/50 hover:text-[#C4C4BA]/80"
-              }`}
-            >
-              <Shield className="w-5 h-5" strokeWidth={currentPageName === "AdminDashboard" ? 2.5 : 1.5} />
-              <span className="text-[10px] font-medium tracking-wide">Admin</span>
-            </Link>
-          )}
           {tabs.map((tab) => {
               const isActive = currentPageName === tab.page;
               const Icon = tab.icon;
