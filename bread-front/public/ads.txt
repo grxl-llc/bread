@@ -1,0 +1,13 @@
+# ads.txt — IAB authorized digital sellers file
+# Required for Google Ad Manager programmatic fill.
+#
+# HOW TO UPDATE:
+# 1. Sign in to AdSense (adsense.google.com) or Ad Manager (admanager.google.com)
+# 2. Find your Publisher ID — it looks like:  pub-1234567890123456
+# 3. Replace the placeholder below with your real pub-ID.
+# 4. Commit and push — Render will redeploy automatically.
+#
+# Format: ad-system, publisher-id, relationship, certification-authority-id
+#
+# ---- REPLACE pub-XXXXXXXXXXXXXXXXX WITH YOUR REAL ADSENSE PUBLISHER ID ----
+google.com, pub-XXXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
