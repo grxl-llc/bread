@@ -10,4 +10,4 @@
 # Format: ad-system, publisher-id, relationship, certification-authority-id
 #
 # ---- REPLACE pub-XXXXXXXXXXXXXXXXX WITH YOUR REAL ADSENSE PUBLISHER ID ----
-google.com, pub-XXXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
+google.com, pub-4306310273252138, DIRECT, f08c47fec0942fa0
