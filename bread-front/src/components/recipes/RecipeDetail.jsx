@@ -344,18 +344,29 @@ export default function RecipeDetail({ recipe, open, onClose, onUpdate, onDelete
                   <Loader2 className="w-4 h-4 animate-spin" />
                   pricing…
                 </span>
+              ) : costData?.pricing_unavailable ? (
+                <span className="flex items-center gap-1.5 text-[#C4C4BA]/50 text-xs">
+                  <MapPin className="w-3.5 h-3.5" />
+                  No local store pricing yet
+                </span>
               ) : displayTotal > 0 ? (
                 <span className="flex items-center gap-1.5 text-[#34D399]">
                   <DollarSign className="w-4 h-4" />
                   ${displayTotal?.toFixed(2)}
                 </span>
               ) : null}
-              {recipe.cheapest_store && (
+              {/* Show real store chain name from live pricing, fall back to stored */}
+              {costData?.store_chain ? (
+                <span className="flex items-center gap-1.5 text-[#C4C4BA]">
+                  <MapPin className="w-4 h-4" />
+                  {costData.store_chain}
+                </span>
+              ) : recipe.cheapest_store && !costData?.pricing_unavailable ? (
                 <span className="flex items-center gap-1.5 text-[#C4C4BA]">
                   <MapPin className="w-4 h-4" />
                   {recipe.cheapest_store}
                 </span>
-              )}
+              ) : null}
             </div>
 
             {/* ── Star Rating ── */}

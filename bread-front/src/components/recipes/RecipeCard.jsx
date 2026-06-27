@@ -19,8 +19,9 @@ function StarBadge({ ratingSum, ratingCount }) {
 export default function RecipeCard({ recipe, onClick, userZip, pantryItems }) {
   const { data: cost, isLoading: costLoading } = useRecipeCost(recipe, userZip, pantryItems);
   // Live cost when we can compute it; fall back to last-known stored cost.
-  const liveCost = cost?.total_cost;
+  const liveCost = cost?.pricing_unavailable ? null : cost?.total_cost;
   const displayCost = liveCost != null ? liveCost : recipe.total_cost;
+  const storeLabel = cost?.store_chain || recipe.cheapest_store;
 
   return (
     <motion.div
@@ -71,12 +72,17 @@ export default function RecipeCard({ recipe, onClick, userZip, pantryItems }) {
               ${displayCost?.toFixed(2)}
             </span>
           ) : null}
-          {recipe.cheapest_store && (
+          {cost?.pricing_unavailable ? (
+            <span className="flex items-center gap-1 text-[#C4C4BA]/40">
+              <MapPin className="w-3.5 h-3.5" />
+              no local pricing
+            </span>
+          ) : storeLabel ? (
             <span className="flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5" />
-              {recipe.cheapest_store}
+              {storeLabel}
             </span>
-          )}
+          ) : null}
         </div>
 
         {/* Star rating — only shown when at least one rating exists */}
