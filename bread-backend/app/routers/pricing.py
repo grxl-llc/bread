@@ -37,8 +37,16 @@ async def get_kroger_token() -> str:
     return token
 
 
-async def get_kroger_store_id(zip_code: str):
-    cache_key = f"kroger_store_{zip_code}"
+MAX_STORE_RADIUS_MILES = 50  # beyond this we say "no local store" rather than silently using a distant one
+
+async def get_kroger_store(zip_code: str) -> dict | None:
+    """
+    Returns {"store_id", "store_name", "store_chain", "distance_miles"} for
+    the nearest Kroger-family store within MAX_STORE_RADIUS_MILES.
+    Returns None if no store is within range.
+    Caches 24 h — store assignments don't change often.
+    """
+    cache_key = f"kroger_store_v2_{zip_code}"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -48,17 +56,50 @@ async def get_kroger_store_id(zip_code: str):
         resp = await client.get(
             KROGER_LOCATIONS_URL,
             headers={"Authorization": f"Bearer {token}"},
-            params={"filter.zipCode.near": zip_code, "filter.limit": 1},
+            params={
+                "filter.zipCode.near": zip_code,
+                "filter.radiusInMiles": MAX_STORE_RADIUS_MILES,
+                "filter.limit": 1,
+            },
         )
         resp.raise_for_status()
         data = resp.json()
 
     if not data.get("data"):
+        cache_set(cache_key, None, ttl_seconds=3600)
         return None
 
-    store_id = data["data"][0]["locationId"]
-    cache_set(cache_key, store_id, ttl_seconds=86400)  # 24h
-    return store_id
+    loc = data["data"][0]
+    # Kroger API returns geolocation; distance isn't a direct field but chain name is.
+    chain_raw = (loc.get("chain") or "KROGER").upper()
+    # Map chain codes to friendly display names
+    CHAIN_NAMES = {
+        "KROGER": "Kroger", "HARRIS_TEETER": "Harris Teeter",
+        "FRED_MEYER": "Fred Meyer", "RALPHS": "Ralphs",
+        "KING_SOOPERS": "King Soopers", "CITY_MARKET": "City Market",
+        "SMITHS": "Smith's", "FRYS": "Fry's", "QFC": "QFC",
+        "MARIANOS": "Mariano's", "PICK_N_SAVE": "Pick 'n Save",
+        "METRO_MARKET": "Metro Market", "COPPS": "Copps",
+        "DILLONS": "Dillons", "BAKERS": "Baker's",
+        "GERBES": "Gerbes", "OWEN": "Owen's",
+        "PAY_LESS": "Pay Less",
+    }
+    store_name = loc.get("name") or CHAIN_NAMES.get(chain_raw, chain_raw.title())
+    chain_display = CHAIN_NAMES.get(chain_raw, chain_raw.title())
+
+    result = {
+        "store_id": loc["locationId"],
+        "store_name": store_name,
+        "store_chain": chain_display,
+    }
+    cache_set(cache_key, result, ttl_seconds=86400)
+    return result
+
+
+# Backward-compat shim used internally by search_prices
+async def get_kroger_store_id(zip_code: str) -> str | None:
+    store = await get_kroger_store(zip_code)
+    return store["store_id"] if store else None
 
 
 @router.get("/search")
@@ -98,6 +139,10 @@ async def search_prices(
         resp.raise_for_status()
         raw = resp.json()
 
+    # Get the real chain name for this store
+    store_info = await get_kroger_store(zip_code)
+    chain_label = store_info["store_chain"] if store_info else "Kroger"
+
     results = []
     for item in raw.get("data", []):
         price_info = item.get("items", [{}])[0] if item.get("items") else {}
@@ -115,7 +160,7 @@ async def search_prices(
             "price": price,
             "sale_price": sale_price,
             "image_url": (item.get("images") or [{}])[0].get("sizes", [{}])[-1].get("url"),
-            "store": "Kroger",
+            "store": chain_label,
             "store_id": store_id,
             "zip_code": zip_code,
         })
@@ -256,7 +301,20 @@ async def recipe_cost(
         return 1
 
     # Resolve the store once for direct product-by-id pricing.
-    store_id = await get_kroger_store_id(zip_code)
+    store_info = await get_kroger_store(zip_code)
+    if not store_info:
+        return {
+            "total_cost": None,
+            "ingredients": [],
+            "already_have": [],
+            "store_name": None,
+            "store_chain": None,
+            "pricing_unavailable": True,
+            "pricing_note": f"No Kroger-family store found within {MAX_STORE_RADIUS_MILES} miles of {zip_code}. Live pricing coming soon for more stores.",
+        }
+    store_id = store_info["store_id"]
+    store_chain = store_info["store_chain"]
+    store_name = store_info["store_name"]
 
     results = []
     already_have = []
@@ -353,6 +411,10 @@ async def recipe_cost(
         "total_cost": round(total_cost, 2),
         "ingredients": results,
         "already_have": already_have,
+        "store_name": store_name,
+        "store_chain": store_chain,
+        "pricing_unavailable": False,
+        "pricing_note": f"Live prices from {store_chain}",
     }
 
 
